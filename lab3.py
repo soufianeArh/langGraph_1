@@ -18,10 +18,16 @@ import nest_asyncio
 from langchain_community.agent_toolkits import PlayWrightBrowserToolkit
 from langchain_community.tools.playwright.utils import create_async_playwright_browser
 
+import asyncio 
+
+load_dotenv(override=True)
+nest_asyncio.apply()
 
 ## decalre state
 class State(TypedDict):
       messages: Annotated[list, add_messages]
+
+graph_builder = StateGraph(State)
 
 ##custom tool
 pushover_token = os.getenv("PUSHOVER_TOKEN")
@@ -35,24 +41,43 @@ push_tool = Tool(
       func=push,
       description="Invoked when we need to send a notification to user"
 )
-## browser and its tools 
-async_browser =  create_async_playwright_browser(headless=False)  # headful mode
+
+##declare tools 
+async_browser =  create_async_playwright_browser(headless=False)
 toolkit = PlayWrightBrowserToolkit.from_browser(async_browser=async_browser)
 tools = toolkit.get_tools()
-toolsDict = {tool.name:tools for tool in tools}
+tool_dict = {tool.name:tool for tool in tools}
+#     navigate_tool = tool_dict.get("navigate_browser")
+#     await navigate_tool.arun({"url": "https://www.cnn.com"})
+all_tools = tools + [push_tool]
 
-def main():
+
+## chatbot niode
+llm = ChatOpenAI(model="gpt-4o-mini")
+llm_with_tools = llm.bind_tools(all_tools)
+
+def chatbot(state:State):
+     return {"messages":[llm_with_tools.invoke(state["messages"])]}
+
+#nodes
+graph_builder.add_node("chatbot", chatbot)
+graph_builder.add_node("tools", ToolNode(tools=all_tools))
+
+#edges
+graph_builder.add_conditional_edges( "chatbot", tools_condition, "tools")
+graph_builder.add_edge("tools", "chatbot")
+graph_builder.add_edge(START, "chatbot")
+
+memory = MemorySaver()
+graph = graph_builder.compile(checkpointer=memory)
+img = graph.get_graph().draw_mermaid_png()
+
+with open("graph.png", "wb") as f:
+    f.write(img)
+
+async def main():
     print("Hello from langgraph!")
-    load_dotenv(override=True)
-    nest_asyncio.apply()
-    graph_builder = StateGraph(State)
-    # If you get a NotImplementedError here or later, see the Heads Up at the top of the notebook
 
-    
-    print(toolsDict)
-
-
-
-
+  
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
