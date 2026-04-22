@@ -21,7 +21,7 @@ from langchain_community.tools.playwright.utils import create_async_playwright_b
 import asyncio 
 
 load_dotenv(override=True)
-nest_asyncio.apply()
+# nest_asyncio.apply()langsm
 
 ## decalre state
 class State(TypedDict):
@@ -74,6 +74,13 @@ img = graph.get_graph().draw_mermaid_png()
 
 with open("graph.png", "wb") as f:
     f.write(img)
+
+
+config = {"configurable":{"thread_id":"10"}}
+def chat(user_input: str, history):
+     result = graph.invoke({"messages":[{"role":"user", "content":user_input}]},config=config)
+     return result["messages"][-1].content
+gr.ChatInterface(chat).launch()
 
 async def main():
     print("Hello from langgraph!")
